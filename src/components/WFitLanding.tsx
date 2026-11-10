@@ -3,15 +3,29 @@ import {
   ArrowUpRight, ArrowDown, ChevronRight, Check, Dumbbell, ShieldCheck, 
   Phone, Mail, MapPin, Clock, ExternalLink, X, Award, Calendar, 
   CreditCard, Sparkles, Menu, Send, CheckCircle2, AlertCircle, Eye,
-  ChevronDown, Layers, Users, Zap
+  ChevronDown, Layers, Users, Zap, LogIn, LogOut
 } from 'lucide-react';
 import { INITIAL_PLANS, INITIAL_TRAINERS, INITIAL_GALLERY_ITEMS, INITIAL_MEMBERS } from '../mockData';
-import { MembershipPlan, Member, Invoice } from '../types';
+import { MembershipPlan, Member, TrainerProfile, UserAccount } from '../types';
 import { DemoPaymentModal } from './DemoPaymentModal';
+import { AvatarImage } from './AvatarImage';
 import { GYM_IMAGES } from '../assets/images';
 
 interface WFitLandingProps {
+  plans?: MembershipPlan[];
+  trainers?: TrainerProfile[];
+  currentUser?: UserAccount | null;
   onOpenCrm: () => void;
+  onOpenLogin?: () => void;
+  onOpenRegister?: () => void;
+  onLogout?: () => void;
+  onSubmitLead?: (lead: {
+    name: string;
+    mobile: string;
+    email: string;
+    interestedPlan: string;
+    message: string;
+  }) => Promise<void> | void;
   onJoinClick?: () => void;
   onExplorePrograms?: () => void;
 }
@@ -67,10 +81,18 @@ const SAMPLE_TESTIMONIALS = [
 ];
 
 export const WFitLanding: React.FC<WFitLandingProps> = ({ 
-  onOpenCrm, 
-  onJoinClick,
-  onExplorePrograms 
+  plans = INITIAL_PLANS,
+  trainers = INITIAL_TRAINERS,
+  currentUser = null,
+  onOpenCrm,
+  onOpenLogin,
+  onOpenRegister,
+  onLogout,
+  onSubmitLead
 }) => {
+  const plansList = plans.length > 0 ? plans : INITIAL_PLANS;
+  const trainersList = trainers.length > 0 ? trainers : INITIAL_TRAINERS;
+
   // Navigation active tab
   const [activeNav, setActiveNav] = useState('Home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -88,11 +110,9 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
   ];
 
   // Statistics counters
-  const [count500, setCount500] = useState(500);
-  const [count10Years, setCount10Years] = useState(10);
+  const [count500] = useState(500);
   const [manifestoProgress, setManifestoProgress] = useState(0);
   const [equipmentScrollOffset, setEquipmentScrollOffset] = useState(0);
-  const [trustInView, setTrustInView] = useState(false);
 
   // Gallery Lightbox Modal
   const [selectedGalleryPhoto, setSelectedGalleryPhoto] = useState<typeof INITIAL_GALLERY_ITEMS[0] | null>(null);
@@ -100,7 +120,7 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
 
   // Interactive Demo Payment Modal trigger from landing page
   const [isDemoPaymentModalOpen, setIsDemoPaymentModalOpen] = useState(false);
-  const [selectedPlanForDemo, setSelectedPlanForDemo] = useState<MembershipPlan>(INITIAL_PLANS[1] || INITIAL_PLANS[0]);
+  const [selectedPlanForDemo, setSelectedPlanForDemo] = useState<MembershipPlan>(plansList[1] || plansList[0]);
   const [demoMember] = useState<Member>(INITIAL_MEMBERS[0]);
 
   // Enquiry Form State
@@ -136,14 +156,6 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
         setManifestoProgress(prog);
       }
 
-      // Community trust panel in view
-      if (communityRef.current) {
-        const rect = communityRef.current.getBoundingClientRect();
-        if (rect.top <= window.innerHeight * 0.85) {
-          setTrustInView(true);
-        }
-      }
-
       // Update active nav based on scroll position
       const sections = navItems.map(item => document.getElementById(item.id));
       const currentScrollPos = window.scrollY + 200;
@@ -176,7 +188,7 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
     setIsDemoPaymentModalOpen(true);
   };
 
-  const handleEnquirySubmit = (e: React.FormEvent) => {
+  const handleEnquirySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setEnquiryError(null);
 
@@ -193,7 +205,17 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
       return;
     }
 
-    // Show clear demo confirmation
+    if (onSubmitLead) {
+      await onSubmitLead({
+        name: enquiryForm.fullName.trim(),
+        mobile: enquiryForm.phone.trim(),
+        email: enquiryForm.email.trim(),
+        interestedPlan: enquiryForm.plan,
+        message: enquiryForm.message.trim()
+      });
+    }
+
+    // Show clear confirmation
     setEnquirySubmitted(true);
   };
 
@@ -250,33 +272,79 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
           </nav>
 
           {/* Right Action Buttons */}
-          <div className="hidden sm:flex items-center gap-3">
-            <button
-              onClick={() => handleNavClick('enquiry', 'Enquiry')}
-              className="px-4 py-2 rounded-full border border-white/20 text-white hover:border-[#C6FF00] hover:text-[#C6FF00] text-xs font-semibold tracking-wide transition-all cursor-pointer"
-            >
-              Membership Enquiry
-            </button>
+          <div className="hidden sm:flex items-center gap-2.5">
+            {currentUser ? (
+              <>
+                <button
+                  onClick={onOpenCrm}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                  title="Launch Member & Staff Management Portal"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#BFFF00] animate-pulse" />
+                  <span>Open Portal ({currentUser.role === 'OWNER / ADMIN' ? 'Admin' : currentUser.role === 'CLUB MANAGER' ? 'Manager' : currentUser.role})</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/20 text-white/80 hover:text-white hover:border-rose-400/60 text-xs font-semibold transition-all cursor-pointer"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span className="hidden xl:inline">Sign Out</span>
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                {onOpenLogin && (
+                  <button
+                    onClick={onOpenLogin}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/25 text-white hover:border-[#C6FF00] hover:text-[#C6FF00] text-xs font-semibold tracking-wide transition-all cursor-pointer"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>Sign In</span>
+                  </button>
+                )}
 
-            <button
-              onClick={onOpenCrm}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-xs font-bold transition-all shadow-md cursor-pointer"
-              title="Launch Member & Staff Management Portal"
-            >
-              <span className="w-2 h-2 rounded-full bg-[#BFFF00] animate-pulse" />
-              <span>CRM Portal</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </button>
+                {onOpenRegister && (
+                  <button
+                    onClick={onOpenRegister}
+                    className="hidden xl:flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold tracking-wide transition-all cursor-pointer"
+                  >
+                    <span>Join Now</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={onOpenCrm}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                  title="Sign In to CRM & Member Portal"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#BFFF00] animate-pulse" />
+                  <span>CRM Portal</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
           </div>
 
           {/* Mobile Hamburger Button */}
           <div className="flex items-center gap-2 lg:hidden">
+            {!currentUser && onOpenLogin && (
+              <button
+                onClick={onOpenLogin}
+                className="px-3 py-1.5 rounded-full border border-white/20 text-white text-xs font-semibold cursor-pointer"
+              >
+                Sign In
+              </button>
+            )}
             <button
               onClick={onOpenCrm}
-              className="px-3 py-1.5 rounded-full bg-[#1D4ED8] text-white text-xs font-bold flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-full bg-[#1D4ED8] text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#BFFF00]" />
-              <span>CRM</span>
+              <span>{currentUser ? 'Portal' : 'CRM'}</span>
             </button>
 
             <button
@@ -307,6 +375,17 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
               </button>
             ))}
             <div className="pt-2 mt-1 border-t border-white/10 flex flex-col gap-2">
+              {!currentUser && onOpenRegister && (
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenRegister();
+                  }}
+                  className="w-full py-2.5 rounded-lg bg-[#C6FF00] text-black text-xs font-bold text-center cursor-pointer"
+                >
+                  Create Member Account
+                </button>
+              )}
               <button
                 onClick={() => handleNavClick('enquiry', 'Enquiry')}
                 className="w-full py-2.5 rounded-lg border border-[#C6FF00] text-[#C6FF00] text-xs font-bold text-center"
@@ -964,7 +1043,7 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {INITIAL_TRAINERS.map((trainer) => (
+            {trainersList.map((trainer) => (
               <div 
                 key={trainer.id}
                 className="bg-[#121212] border border-white/10 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-white/30 transition-all group"
@@ -972,15 +1051,17 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
                 <div>
                   {/* Photo with overlay */}
                   <div className="relative h-64 overflow-hidden bg-neutral-900">
-                    <img 
+                    <AvatarImage 
                       src={trainer.photoUrl} 
+                      name={trainer.name}
                       alt={trainer.name}
-                      className="w-full h-full object-cover filter grayscale contrast-110 group-hover:scale-105 transition-transform duration-500" 
+                      className="w-full h-full object-cover filter grayscale contrast-110 group-hover:scale-105 transition-transform duration-500"
+                      fallbackClassName="w-full h-full bg-neutral-800 text-[#C6FF00] font-archivo-title text-4xl flex items-center justify-center"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex items-end p-4">
                       <div>
                         <span className="text-[10px] font-mono text-[#C6FF00] uppercase block">
-                          {trainer.experienceYears} Years Exp.
+                          {trainer.experienceYears || 5} Years Exp.
                         </span>
                         <h4 className="font-archivo-wide text-lg font-bold text-white uppercase">
                           {trainer.name}
@@ -1058,7 +1139,7 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {INITIAL_PLANS.map((plan) => {
+            {plansList.map((plan) => {
               const isPopular = plan.id === 'plan-3m';
               const isAnnual = plan.id === 'plan-12m';
 
@@ -1167,7 +1248,7 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
               </p>
             </div>
             <button
-              onClick={() => handleOpenDemoPaymentForPlan(INITIAL_PLANS[1])}
+              onClick={() => handleOpenDemoPaymentForPlan(plansList[1] || plansList[0])}
               className="px-4 py-2 bg-[#1D4ED8] hover:bg-[#1E40AF] text-white font-bold rounded-lg shrink-0 cursor-pointer text-xs"
             >
               Launch Demo Checkout →
@@ -1279,10 +1360,12 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
                 </p>
 
                 <div className="pt-4 border-t border-white/10 flex items-center gap-3">
-                  <img 
+                  <AvatarImage 
                     src={t.avatar} 
+                    name={t.name}
                     alt={t.name}
-                    className="w-10 h-10 rounded-full object-cover filter grayscale contrast-110 border border-white/20" 
+                    className="w-10 h-10 rounded-full object-cover filter grayscale contrast-110 border border-white/20"
+                    fallbackClassName="w-10 h-10 rounded-full bg-white/10 text-[#C6FF00] font-bold text-xs flex items-center justify-center border border-white/20 shrink-0"
                   />
                   <div>
                     <h5 className="font-bold text-white text-xs">{t.name}</h5>
@@ -1654,13 +1737,22 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
                 <p className="font-mono">Sun: 07:00 - 14:00</p>
               </div>
 
-              <div className="pt-2">
+              <div className="pt-2 flex flex-wrap gap-2">
+                {!currentUser && onOpenLogin && (
+                  <button
+                    onClick={onOpenLogin}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold cursor-pointer"
+                  >
+                    <LogIn className="w-3 h-3 text-[#C6FF00]" />
+                    <span>Member & Staff Login</span>
+                  </button>
+                )}
                 <button
                   onClick={onOpenCrm}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-[11px] font-bold"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-[11px] font-bold cursor-pointer"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-[#BFFF00]" />
-                  <span>Staff & CRM Login</span>
+                  <span>{currentUser ? 'Open CRM Portal' : 'CRM & Portals'}</span>
                 </button>
               </div>
             </div>
@@ -1777,7 +1869,7 @@ export const WFitLanding: React.FC<WFitLandingProps> = ({
         isOpen={isDemoPaymentModalOpen}
         onClose={() => setIsDemoPaymentModalOpen(false)}
         member={demoMember}
-        plans={INITIAL_PLANS}
+        plans={plansList}
         initialInvoice={{
           id: `DEMO-INV-${Math.floor(1000 + Math.random() * 9000)}`,
           memberId: demoMember.id,

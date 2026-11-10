@@ -4,8 +4,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { 
-  UserAccount, UserRole, Member, Invoice, PTSession, 
-  WorkoutPlan, AuditLogItem, SystemSettings, TrainerProfile, PaymentMethod 
+  UserAccount, UserRole, UserPermissions, Member, Invoice, PTSession, 
+  WorkoutPlan, AuditLogItem, SystemSettings, TrainerProfile, Lead,
+  MembershipPlan, BiometricLog, RenewalTask 
 } from './src/types';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -133,6 +134,32 @@ seedAccount({
   createdAt: '2026-02-01',
 }, 'Trainer@WFIT2026!');
 
+// 4b. Trainer 3 (Elena Rostova)
+seedAccount({
+  id: 'USR-TR-03',
+  username: 'elena.trainer',
+  email: 'elena.rostova@wfitgym.com',
+  name: 'Elena Rostova',
+  role: 'TRAINER',
+  trainerId: 'TR-ELENA',
+  branch: 'Downtown Flagship',
+  isActive: true,
+  createdAt: '2026-02-05',
+}, 'Trainer@WFIT2026!');
+
+// 4c. Trainer 4 (Vikram Rathore)
+seedAccount({
+  id: 'USR-TR-04',
+  username: 'vikram.trainer',
+  email: 'vikram.rathore@wfitgym.com',
+  name: 'Vikram Rathore',
+  role: 'TRAINER',
+  trainerId: 'TR-VIKRAM',
+  branch: 'Downtown Flagship',
+  isActive: true,
+  createdAt: '2026-02-10',
+}, 'Trainer@WFIT2026!');
+
 // 5. Member 1 (Rohan Mehra)
 seedAccount({
   id: 'USR-MEM-01',
@@ -175,17 +202,72 @@ seedAccount({
 // Session Store: token -> { user: UserAccount, expiresAt: number }
 const SESSIONS: Map<string, { user: UserAccount; expiresAt: number }> = new Map();
 
+// Password Reset Codes Store: identifier -> { accountId: string, code: string, expiresAt: number }
+const PASSWORD_RESET_CODES: Map<string, { accountId: string; code: string; expiresAt: number }> = new Map();
+
 // Rate Limiting Store: IP/Username -> { failedAttempts: number, lockedUntil: number }
 const LOGIN_ATTEMPTS: Map<string, { failedAttempts: number; lockedUntil: number }> = new Map();
 
 // System Settings
 const SYSTEM_SETTINGS: SystemSettings = {
-  managerPaymentAccessEnabled: false, // Default: Manager cannot access financial data unless Admin explicitly permits!
+  managerPaymentAccessEnabled: false,
   gymName: 'WFIT GYM',
   primaryBranch: 'Downtown Flagship',
   allowSelfRegistration: true,
   biometricEnforcementActive: true
 };
+
+function computePermissions(role: UserRole): UserPermissions {
+  return {
+    canViewFinances: role === 'OWNER / ADMIN' || (role === 'CLUB MANAGER' && SYSTEM_SETTINGS.managerPaymentAccessEnabled),
+    canManageStaff: role === 'OWNER / ADMIN',
+    canEditSecurity: role === 'OWNER / ADMIN',
+    canManageMembers: role === 'OWNER / ADMIN' || role === 'CLUB MANAGER',
+    canManageWorkouts: role === 'OWNER / ADMIN' || role === 'CLUB MANAGER' || role === 'TRAINER',
+    isTrainerOnly: role === 'TRAINER',
+    isMemberOnly: role === 'MEMBER'
+  };
+}
+
+// Seed Membership Plans
+const PLANS_DB: MembershipPlan[] = [
+  {
+    id: 'plan-1m',
+    name: 'Monthly Plan',
+    durationMonths: 1,
+    price: 2999,
+    registrationFee: 500,
+    taxPercent: 18,
+    features: ['Access to main gym floor', 'Locker & shower amenities', 'Fitness movement screen', 'Biometric turnstile access']
+  },
+  {
+    id: 'plan-3m',
+    name: 'Quarterly Plan',
+    durationMonths: 3,
+    price: 7499,
+    registrationFee: 500,
+    taxPercent: 18,
+    features: ['All monthly features', '1 complimentary PT consultation', 'Personalized macronutrient guide', 'Locker bag tag']
+  },
+  {
+    id: 'plan-6m',
+    name: 'Half-Yearly Plan',
+    durationMonths: 6,
+    price: 13499,
+    registrationFee: 0,
+    taxPercent: 18,
+    features: ['All quarterly features', 'Zero registration fee', '2 Guest workout passes/month', 'Freeze membership up to 15 days']
+  },
+  {
+    id: 'plan-12m',
+    name: 'Annual Pass',
+    durationMonths: 12,
+    price: 22999,
+    registrationFee: 0,
+    taxPercent: 18,
+    features: ['Full gym & recovery access', 'Unlimited sauna & steam suite', '4 Guest passes/month', '30 days freeze option', 'Quarterly InBody composition test']
+  }
+];
 
 // Seed Trainer Profiles
 const TRAINERS_DB: TrainerProfile[] = [
@@ -193,23 +275,149 @@ const TRAINERS_DB: TrainerProfile[] = [
     id: 'TR-ALEX',
     name: 'Alex Chen',
     email: 'alex.chen@wfitgym.com',
-    phone: '+91 98765 12340',
+    phone: '+91 98201 10001',
     photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=240&auto=format&fit=crop&q=80',
-    specialisation: 'Biomechanics, Hypertrophy & Olympic Weightlifting',
+    specialisation: 'Olympic Weightlifting, Hypertrophy & Barbell Strength',
     branch: 'Downtown Flagship',
     workingHours: '06:00 - 14:00 (Mon - Fri)',
+    experienceYears: 8,
+    certifications: ['CSCS (NSCA)', 'USA Weightlifting Level 2', 'Precision Nutrition L1'],
+    bio: 'Former collegiate powerlifting competitor specializing in biomechanically sound squat, bench, and deadlift progressions.',
     assignedMemberIds: ['WFIT-2026-001', 'WFIT-2026-002']
   },
   {
     id: 'TR-MARCUS',
     name: 'Marcus Stone',
     email: 'marcus.stone@wfitgym.com',
-    phone: '+91 98765 12341',
-    photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&auto=format&fit=crop&q=80',
-    specialisation: 'Conditioning, Strength & Athletic Rehabilitation',
+    phone: '+91 98201 10002',
+    photoUrl: 'https://images.unsplash.com/photo-1567013127542-490d757e51fc?w=400&auto=format&fit=crop&q=80',
+    specialisation: 'Bodybuilding, Functional Hypertrophy & Strength Protocols',
+    branch: 'Downtown Flagship',
+    workingHours: '12:00 - 20:00 (Mon - Fri)',
+    experienceYears: 6,
+    certifications: ['ISSA Master Trainer', 'EXOS Performance Specialist'],
+    bio: 'Dedicated to helping athletes build dense lean muscle through progressive overload and customized hypertrophy splits.',
+    assignedMemberIds: ['WFIT-2026-003']
+  },
+  {
+    id: 'TR-ELENA',
+    name: 'Elena Rostova',
+    email: 'elena.rostova@wfitgym.com',
+    phone: '+91 98201 10003',
+    photoUrl: 'https://images.unsplash.com/photo-1594381898411-846e7d193883?w=400&auto=format&fit=crop&q=80',
+    specialisation: 'Mobility, Injury Rehabilitation & Athletic Longevity',
+    branch: 'Downtown Flagship',
+    workingHours: '07:00 - 15:00 (Tue - Sat)',
+    experienceYears: 7,
+    certifications: ['ACE Certified Personal Trainer', 'FRC Mobility Specialist'],
+    bio: 'Integrates active joint mobility, functional kinetic chains, and restorative strength work to keep athletes injury-free.',
+    assignedMemberIds: ['WFIT-2026-004']
+  },
+  {
+    id: 'TR-VIKRAM',
+    name: 'Vikram Rathore',
+    email: 'vikram.rathore@wfitgym.com',
+    phone: '+91 98201 10004',
+    photoUrl: 'https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=400&auto=format&fit=crop&q=80',
+    specialisation: 'Boxing Conditioning, Sprint Mechanics & Metabolic Conditioning',
     branch: 'Downtown Flagship',
     workingHours: '14:00 - 22:00 (Mon - Fri)',
-    assignedMemberIds: ['WFIT-2026-003', 'WFIT-2026-005']
+    experienceYears: 5,
+    certifications: ['NASM-CPT', 'Level 2 Boxing Coach'],
+    bio: 'Combines fight conditioning, pad work, agility drills, and anaerobic intervals for rapid metabolic conditioning.',
+    assignedMemberIds: ['WFIT-2026-005']
+  }
+];
+
+// Seed Leads & Enquiries
+const LEADS_DB: Lead[] = [
+  {
+    id: 'LEAD-2026-101',
+    name: 'Sameer Kulkarni',
+    mobile: '+91 98220 55667',
+    email: 'sameer.k@example.com',
+    source: 'Instagram',
+    interestedProduct: 'Gym Membership',
+    assignedExecutive: 'Sneha Rao (Front Office)',
+    stage: 'Visit / trial scheduled',
+    enquiryDate: '2026-10-28',
+    lastContactDate: '2026-10-29',
+    nextFollowUpDate: '2026-10-31',
+    trialDate: '2026-10-31',
+    notes: 'Interested in annual membership and morning free weights training.'
+  },
+  {
+    id: 'LEAD-2026-102',
+    name: 'Divya Nair',
+    mobile: '+91 97440 11223',
+    email: 'divya.nair@example.com',
+    source: 'Walk-in',
+    interestedProduct: 'Personal Training',
+    assignedExecutive: 'Sneha Rao (Front Office)',
+    stage: 'New enquiry',
+    enquiryDate: '2026-10-30',
+    lastContactDate: '2026-10-30',
+    nextFollowUpDate: '2026-10-31',
+    notes: 'Looking for 1-on-1 coaching for post-rehab posture and mobility.'
+  }
+];
+
+// Seed Biometric Logs
+const BIOMETRIC_LOGS_DB: BiometricLog[] = [
+  {
+    id: 'BIO-2026-8001',
+    timestamp: '2026-10-30 06:15:22',
+    memberId: 'WFIT-2026-001',
+    memberName: 'Rohan Mehra',
+    device: 'Turnstile Gate #1 (Main)',
+    scanType: 'Fingerprint',
+    result: 'GRANTED'
+  },
+  {
+    id: 'BIO-2026-8002',
+    timestamp: '2026-10-30 06:45:10',
+    memberId: 'WFIT-2026-003',
+    memberName: 'Vikramaditya Sengupta',
+    device: 'Turnstile Gate #1 (Main)',
+    scanType: 'Face ID',
+    result: 'DENIED',
+    denialReason: 'Outstanding invoice balance pending settlement'
+  },
+  {
+    id: 'BIO-2026-8003',
+    timestamp: '2026-10-30 07:12:05',
+    memberId: 'WFIT-2026-005',
+    memberName: 'Kabir Oberoi',
+    device: 'Turnstile Gate #1 (Main)',
+    scanType: 'Fingerprint',
+    result: 'GRANTED'
+  }
+];
+
+const RENEWALS_DB: RenewalTask[] = [
+  {
+    id: 'REN-2026-01',
+    memberId: 'WFIT-2026-002',
+    memberName: 'Priya Sharma',
+    planName: 'Half-Yearly Plan',
+    expiryDate: '2026-11-06',
+    daysRemaining: 7,
+    lastReminderSentDate: '2026-10-30',
+    reminderType: '7 Days Before',
+    status: 'Sent',
+    assignedStaff: 'Sneha Rao'
+  },
+  {
+    id: 'REN-2026-02',
+    memberId: 'WFIT-2026-004',
+    memberName: 'Ananya Deshmukh',
+    planName: 'Annual Pass',
+    expiryDate: '2026-10-15',
+    daysRemaining: -15,
+    lastReminderSentDate: '2026-10-25',
+    reminderType: 'Overdue',
+    status: 'Pending',
+    assignedStaff: 'Rahul Varma'
   }
 ];
 
@@ -604,7 +812,7 @@ function requireRole(allowedRoles: UserRole[]) {
 
 // 1. Auth: Sign In
 app.post('/api/auth/login', (req: Request, res: Response) => {
-  const { identifier, password } = req.body; // identifier = username or email
+  const { identifier, password, rememberMe } = req.body; // identifier = username or email
   const clientIp = req.ip || '127.0.0.1';
 
   if (!identifier || !password) {
@@ -637,7 +845,6 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   }
 
   if (!targetAccount || !targetAccount.isActive) {
-    // Record failure
     const current = rateLimit?.failedAttempts || 0;
     const newCount = current + 1;
     LOGIN_ATTEMPTS.set(attemptKey, {
@@ -660,7 +867,7 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     });
 
     logAudit(targetAccount.email, targetAccount.role, 'LOGIN_FAILED', '/api/auth/login', 'Incorrect password provided', 'FAILED');
-    res.status(401).json({ error: 'Unauthorized', message: 'Invalid credentials.' });
+    res.status(401).json({ error: 'Unauthorized', message: 'Invalid email/username or password.' });
     return;
   }
 
@@ -683,27 +890,279 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     lastLoginAt: new Date().toISOString()
   };
 
-  // 8-hour expiry
+  // 7-day expiry if rememberMe, otherwise 8 hours
+  const ttlMs = rememberMe ? 7 * 24 * 60 * 60 * 1000 : 8 * 60 * 60 * 1000;
+  SESSIONS.set(token, {
+    user: sessionUser,
+    expiresAt: Date.now() + ttlMs
+  });
+
+  logAudit(targetAccount.email, targetAccount.role, 'LOGIN_SUCCESS', '/api/auth/login', 'Authenticated successfully', 'SUCCESS');
+
+  const linkedMember = sessionUser.memberId
+    ? MEMBERS_DB.find(m => m.id === sessionUser.memberId)
+    : undefined;
+
+  res.json({
+    token,
+    user: sessionUser,
+    member: linkedMember,
+    permissions: computePermissions(targetAccount.role)
+  });
+});
+
+// 1b. Auth: Public Member Registration (Create Account)
+app.post('/api/auth/register', (req: Request, res: Response) => {
+  if (!SYSTEM_SETTINGS.allowSelfRegistration) {
+    res.status(403).json({
+      error: 'Forbidden',
+      message: 'Self-registration is currently disabled by the club administrator. Please contact front desk.'
+    });
+    return;
+  }
+
+  const { fullName, email, mobile, username, password, branch, planId, fitnessGoals } = req.body;
+
+  if (!fullName || typeof fullName !== 'string' || fullName.trim().length < 2) {
+    res.status(400).json({ error: 'Bad Request', message: 'Full name is required (at least 2 characters).' });
+    return;
+  }
+  const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    res.status(400).json({ error: 'Bad Request', message: 'A valid email address is required.' });
+    return;
+  }
+  const cleanMobile = typeof mobile === 'string' ? mobile.trim() : '';
+  if (!cleanMobile || cleanMobile.replace(/\D/g, '').length < 8) {
+    res.status(400).json({ error: 'Bad Request', message: 'A valid mobile phone number is required.' });
+    return;
+  }
+  if (!password || typeof password !== 'string' || password.length < 8) {
+    res.status(400).json({ error: 'Bad Request', message: 'Password must be at least 8 characters long.' });
+    return;
+  }
+
+  const cleanUsername = (
+    typeof username === 'string' && username.trim()
+      ? username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '')
+      : cleanEmail.split('@')[0].replace(/[^a-z0-9._-]/g, '')
+  );
+
+  for (const acc of ACCOUNTS_DB.values()) {
+    if (acc.email.toLowerCase() === cleanEmail) {
+      res.status(409).json({ error: 'Conflict', message: 'An account with this email address already exists.' });
+      return;
+    }
+    if (acc.username.toLowerCase() === cleanUsername) {
+      res.status(409).json({ error: 'Conflict', message: `Username "${cleanUsername}" is already taken.` });
+      return;
+    }
+  }
+
+  const chosenPlan = PLANS_DB.find(p => p.id === planId) || PLANS_DB[0];
+  const now = new Date();
+  const startDate = now.toISOString().split('T')[0];
+  const expiry = new Date(now);
+  expiry.setMonth(expiry.getMonth() + chosenPlan.durationMonths);
+  const expiryDate = expiry.toISOString().split('T')[0];
+
+  const memberId = `WFIT-2026-${String(MEMBERS_DB.length + 101).padStart(3, '0')}`;
+  const chosenBranch = branch || 'Downtown Flagship';
+
+  const newMember: Member = {
+    id: memberId,
+    fullName: fullName.trim(),
+    mobile: cleanMobile,
+    email: cleanEmail,
+    dateOfBirth: '1996-01-01',
+    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=240&auto=format&fit=crop&q=80',
+    registrationDate: startDate,
+    branch: chosenBranch,
+    status: 'Active',
+    planId: chosenPlan.id,
+    planName: chosenPlan.name,
+    startDate,
+    expiryDate,
+    assignedTrainerId: 'TR-ALEX',
+    assignedTrainerName: 'Alex Chen',
+    fitnessGoals: typeof fitnessGoals === 'string' && fitnessGoals.trim()
+      ? fitnessGoals.trim()
+      : 'Strength progression, mobility improvement, and lean body composition.',
+    biometricEnrolled: false,
+    notes: 'Self-registered through WFIT GYM web portal.'
+  };
+  MEMBERS_DB.unshift(newMember);
+
+  const accountId = `USR-MEM-${Date.now().toString().slice(-5)}`;
+  seedAccount({
+    id: accountId,
+    username: cleanUsername,
+    email: cleanEmail,
+    name: fullName.trim(),
+    role: 'MEMBER',
+    memberId,
+    branch: chosenBranch,
+    isActive: true,
+    createdAt: startDate,
+    lastLoginAt: new Date().toISOString()
+  }, password);
+
+  const created = ACCOUNTS_DB.get(accountId)!;
+  const sessionUser: UserAccount = {
+    id: created.id,
+    username: created.username,
+    email: created.email,
+    role: created.role,
+    name: created.name,
+    memberId: created.memberId,
+    branch: created.branch,
+    isActive: created.isActive,
+    createdAt: created.createdAt,
+    lastLoginAt: created.lastLoginAt
+  };
+
+  const token = generateSecureToken();
   SESSIONS.set(token, {
     user: sessionUser,
     expiresAt: Date.now() + 8 * 60 * 60 * 1000
   });
 
-  logAudit(targetAccount.email, targetAccount.role, 'LOGIN_SUCCESS', '/api/auth/login', 'Authenticated successfully', 'SUCCESS');
+  logAudit(cleanEmail, 'MEMBER', 'MEMBER_SELF_REGISTERED', memberId, `New member account registered via portal (${chosenPlan.name})`, 'SUCCESS');
 
-  res.json({
+  res.status(201).json({
     token,
     user: sessionUser,
-    permissions: {
-      canViewFinances: targetAccount.role === 'OWNER / ADMIN' || (targetAccount.role === 'CLUB MANAGER' && SYSTEM_SETTINGS.managerPaymentAccessEnabled),
-      canManageStaff: targetAccount.role === 'OWNER / ADMIN',
-      canEditSecurity: targetAccount.role === 'OWNER / ADMIN',
-      canManageMembers: targetAccount.role === 'OWNER / ADMIN' || targetAccount.role === 'CLUB MANAGER',
-      canManageWorkouts: targetAccount.role === 'OWNER / ADMIN' || targetAccount.role === 'CLUB MANAGER' || targetAccount.role === 'TRAINER',
-      isTrainerOnly: targetAccount.role === 'TRAINER',
-      isMemberOnly: targetAccount.role === 'MEMBER'
-    }
+    member: newMember,
+    permissions: computePermissions('MEMBER')
   });
+});
+
+// 1c. Auth: Forgot Password Request (Generate 6-Digit Reset Code)
+app.post('/api/auth/forgot-password', (req: Request, res: Response) => {
+  const { identifier } = req.body;
+  if (!identifier || typeof identifier !== 'string' || !identifier.trim()) {
+    res.status(400).json({ error: 'Bad Request', message: 'Please enter your registered email address or username.' });
+    return;
+  }
+
+  const normalized = identifier.trim().toLowerCase();
+  let targetAccount: StoredAccount | undefined;
+  for (const acc of ACCOUNTS_DB.values()) {
+    if (acc.email.toLowerCase() === normalized || acc.username.toLowerCase() === normalized) {
+      targetAccount = acc;
+      break;
+    }
+  }
+
+  if (!targetAccount) {
+    res.status(404).json({ error: 'Not Found', message: 'No registered WFIT GYM account matched that email or username.' });
+    return;
+  }
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  PASSWORD_RESET_CODES.set(targetAccount.email.toLowerCase(), {
+    accountId: targetAccount.id,
+    code,
+    expiresAt: Date.now() + 10 * 60 * 1000
+  });
+
+  const [localPart, domain] = targetAccount.email.split('@');
+  const maskedEmail = `${localPart.slice(0, 2)}***@${domain}`;
+
+  logAudit(targetAccount.email, targetAccount.role, 'PASSWORD_RESET_REQUESTED', targetAccount.id, 'Generated 6-digit password reset verification code', 'SUCCESS');
+
+  res.json({
+    success: true,
+    email: targetAccount.email,
+    maskedEmail,
+    demoPreviewCode: code,
+    expiresInSeconds: 600,
+    message: `A 6-digit verification code has been prepared for ${maskedEmail}.`
+  });
+});
+
+// 1d. Auth: Reset Password with Verification Code
+app.post('/api/auth/reset-password', (req: Request, res: Response) => {
+  const { identifier, code, newPassword } = req.body;
+  if (!identifier || !code || !newPassword) {
+    res.status(400).json({ error: 'Bad Request', message: 'Email/username, 6-digit code, and new password are required.' });
+    return;
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    res.status(400).json({ error: 'Bad Request', message: 'New password must be at least 8 characters long.' });
+    return;
+  }
+
+  const normalized = String(identifier).trim().toLowerCase();
+  let targetAccount: StoredAccount | undefined;
+  for (const acc of ACCOUNTS_DB.values()) {
+    if (acc.email.toLowerCase() === normalized || acc.username.toLowerCase() === normalized) {
+      targetAccount = acc;
+      break;
+    }
+  }
+
+  if (!targetAccount) {
+    res.status(404).json({ error: 'Not Found', message: 'Account not found.' });
+    return;
+  }
+
+  const resetRecord = PASSWORD_RESET_CODES.get(targetAccount.email.toLowerCase());
+  if (!resetRecord || resetRecord.code !== String(code).trim()) {
+    res.status(400).json({ error: 'Invalid Code', message: 'Invalid verification code. Please double-check and try again.' });
+    return;
+  }
+  if (Date.now() > resetRecord.expiresAt) {
+    PASSWORD_RESET_CODES.delete(targetAccount.email.toLowerCase());
+    res.status(400).json({ error: 'Expired Code', message: 'Verification code has expired. Please request a new code.' });
+    return;
+  }
+
+  const newSalt = generateSalt();
+  targetAccount.salt = newSalt;
+  targetAccount.passwordHash = hashPassword(newPassword, newSalt);
+  PASSWORD_RESET_CODES.delete(targetAccount.email.toLowerCase());
+  LOGIN_ATTEMPTS.clear();
+
+  logAudit(targetAccount.email, targetAccount.role, 'PASSWORD_RESET_COMPLETED', targetAccount.id, 'Password updated via reset verification flow', 'SUCCESS');
+
+  res.json({
+    success: true,
+    email: targetAccount.email,
+    message: 'Your password has been updated. Please sign in with your new credentials.'
+  });
+});
+
+// 1e. Auth: Authenticated Change Password
+app.post('/api/auth/change-password', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({ error: 'Bad Request', message: 'Current password and new password are required.' });
+    return;
+  }
+  if (typeof newPassword !== 'string' || newPassword.length < 8) {
+    res.status(400).json({ error: 'Bad Request', message: 'New password must be at least 8 characters long.' });
+    return;
+  }
+
+  const account = ACCOUNTS_DB.get(req.user!.id);
+  if (!account) {
+    res.status(404).json({ error: 'Not Found', message: 'User account not found.' });
+    return;
+  }
+
+  if (!verifyPassword(currentPassword, account.salt, account.passwordHash)) {
+    res.status(401).json({ error: 'Unauthorized', message: 'Current password is incorrect.' });
+    return;
+  }
+
+  const newSalt = generateSalt();
+  account.salt = newSalt;
+  account.passwordHash = hashPassword(newPassword, newSalt);
+
+  logAudit(account.email, account.role, 'PASSWORD_CHANGED', account.id, 'User updated account password from profile security panel', 'SUCCESS');
+
+  res.json({ success: true, message: 'Password updated successfully.' });
 });
 
 // 2. Auth: Sign Out
@@ -726,17 +1185,14 @@ app.get('/api/auth/me', authMiddleware, (req: AuthenticatedRequest, res: Respons
     return;
   }
 
+  const linkedMember = req.user.memberId
+    ? MEMBERS_DB.find(m => m.id === req.user!.memberId)
+    : undefined;
+
   res.json({
     user: req.user,
-    permissions: {
-      canViewFinances: req.user.role === 'OWNER / ADMIN' || (req.user.role === 'CLUB MANAGER' && SYSTEM_SETTINGS.managerPaymentAccessEnabled),
-      canManageStaff: req.user.role === 'OWNER / ADMIN',
-      canEditSecurity: req.user.role === 'OWNER / ADMIN',
-      canManageMembers: req.user.role === 'OWNER / ADMIN' || req.user.role === 'CLUB MANAGER',
-      canManageWorkouts: req.user.role === 'OWNER / ADMIN' || req.user.role === 'CLUB MANAGER' || req.user.role === 'TRAINER',
-      isTrainerOnly: req.user.role === 'TRAINER',
-      isMemberOnly: req.user.role === 'MEMBER'
-    }
+    member: linkedMember,
+    permissions: computePermissions(req.user.role)
   });
 });
 
@@ -1088,8 +1544,8 @@ app.get('/api/audit-logs', authMiddleware, requireRole(['OWNER / ADMIN']), (_req
   res.json(AUDIT_LOGS_DB);
 });
 
-// 12. Settings: Manager Payment Permission Toggle (Admin Only)
-app.get('/api/settings', authMiddleware, requireRole(['OWNER / ADMIN']), (_req: AuthenticatedRequest, res: Response) => {
+// 12. Settings: System Policies & Manager Payment Access Toggle (Admin Only)
+app.get('/api/settings', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER']), (_req: AuthenticatedRequest, res: Response) => {
   res.json(SYSTEM_SETTINGS);
 });
 
@@ -1107,9 +1563,30 @@ app.put('/api/settings/manager-payment-access', authMiddleware, requireRole(['OW
   res.json({ success: true, settings: SYSTEM_SETTINGS });
 });
 
-// 13. Staff Accounts Management (Admin Only)
+app.put('/api/settings', authMiddleware, requireRole(['OWNER / ADMIN']), (req: AuthenticatedRequest, res: Response) => {
+  const { managerPaymentAccessEnabled, allowSelfRegistration, biometricEnforcementActive } = req.body;
+  if (typeof managerPaymentAccessEnabled === 'boolean') {
+    SYSTEM_SETTINGS.managerPaymentAccessEnabled = managerPaymentAccessEnabled;
+  }
+  if (typeof allowSelfRegistration === 'boolean') {
+    SYSTEM_SETTINGS.allowSelfRegistration = allowSelfRegistration;
+  }
+  if (typeof biometricEnforcementActive === 'boolean') {
+    SYSTEM_SETTINGS.biometricEnforcementActive = biometricEnforcementActive;
+  }
+  logAudit(
+    req.user!.email,
+    req.user!.role,
+    'SYSTEM_SETTINGS_UPDATED',
+    'SYSTEM_SETTINGS',
+    `Updated policies: managerPayment=${SYSTEM_SETTINGS.managerPaymentAccessEnabled}, selfReg=${SYSTEM_SETTINGS.allowSelfRegistration}, biometric=${SYSTEM_SETTINGS.biometricEnforcementActive}`,
+    'SUCCESS'
+  );
+  res.json({ success: true, settings: SYSTEM_SETTINGS });
+});
+
+// 13. Staff & User Accounts Management (Admin Only)
 app.get('/api/staff-accounts', authMiddleware, requireRole(['OWNER / ADMIN']), (_req: AuthenticatedRequest, res: Response) => {
-  // Strip password hashes and salts before returning
   const accounts: UserAccount[] = Array.from(ACCOUNTS_DB.values()).map(acc => ({
     id: acc.id,
     username: acc.username,
@@ -1141,6 +1618,27 @@ app.put('/api/staff-accounts/:id/status', authMiddleware, requireRole(['OWNER / 
   res.json({ success: true, account });
 });
 
+app.put('/api/staff-accounts/:id/reset-password', authMiddleware, requireRole(['OWNER / ADMIN']), (req: AuthenticatedRequest, res: Response) => {
+  const targetId = req.params.id;
+  const { newPassword } = req.body;
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+    res.status(400).json({ error: 'Bad Request', message: 'New password must be at least 8 characters long.' });
+    return;
+  }
+
+  const account = ACCOUNTS_DB.get(targetId);
+  if (!account) {
+    res.status(404).json({ error: 'Not Found', message: 'Account not found.' });
+    return;
+  }
+
+  const salt = generateSalt();
+  account.salt = salt;
+  account.passwordHash = hashPassword(newPassword, salt);
+  logAudit(req.user!.email, req.user!.role, 'ADMIN_PASSWORD_RESET', account.email, `Admin reset login credentials for ${account.name}`, 'SUCCESS');
+  res.json({ success: true, message: `Password reset for ${account.email}.` });
+});
+
 // 14. Trainers Management (Admin Add/Delete & General Query)
 app.get('/api/trainers', (_req: Request, res: Response) => {
   res.json(TRAINERS_DB);
@@ -1158,7 +1656,8 @@ app.post('/api/trainers', authMiddleware, requireRole(['OWNER / ADMIN']), (req: 
     certifications, 
     bio, 
     photoUrl,
-    createLoginAccount 
+    createLoginAccount,
+    initialPassword
   } = req.body;
 
   if (!name || typeof name !== 'string' || !name.trim()) {
@@ -1174,7 +1673,6 @@ app.post('/api/trainers', authMiddleware, requireRole(['OWNER / ADMIN']), (req: 
     return;
   }
 
-  // Duplicate check by email
   const existingTrainer = TRAINERS_DB.find(t => t.email.toLowerCase() === email.trim().toLowerCase());
   if (existingTrainer) {
     res.status(400).json({ error: 'Conflict', message: `A trainer with email ${email.trim()} already exists in the roster.` });
@@ -1213,6 +1711,9 @@ app.post('/api/trainers', authMiddleware, requireRole(['OWNER / ADMIN']), (req: 
   if (createLoginAccount) {
     const username = email.trim().split('@')[0].toLowerCase().replace(/[^a-z0-9._-]/g, '');
     const accountId = `USR-${trainerId}`;
+    const chosenPassword = typeof initialPassword === 'string' && initialPassword.trim().length >= 8
+      ? initialPassword.trim()
+      : 'Trainer@WFIT2026!';
     seedAccount({
       id: accountId,
       username,
@@ -1223,7 +1724,7 @@ app.post('/api/trainers', authMiddleware, requireRole(['OWNER / ADMIN']), (req: 
       branch: branch || 'Downtown Flagship',
       isActive: true,
       createdAt: new Date().toISOString().split('T')[0]
-    }, 'Trainer@WFIT2026!');
+    }, chosenPassword);
 
     const raw = ACCOUNTS_DB.get(accountId);
     if (raw) {
@@ -1268,7 +1769,6 @@ app.delete('/api/trainers/:id', authMiddleware, requireRole(['OWNER / ADMIN']), 
 
   const removed = TRAINERS_DB.splice(index, 1)[0];
 
-  // Unassign members from this trainer
   MEMBERS_DB.forEach(m => {
     if (m.assignedTrainerId === targetId) {
       m.assignedTrainerId = undefined;
@@ -1286,6 +1786,216 @@ app.delete('/api/trainers/:id', authMiddleware, requireRole(['OWNER / ADMIN']), 
   );
 
   res.json({ success: true, message: `Trainer ${removed.name} removed from roster.` });
+});
+
+app.put('/api/trainers/:id', authMiddleware, requireRole(['OWNER / ADMIN', 'TRAINER']), (req: AuthenticatedRequest, res: Response) => {
+  const targetId = req.params.id;
+  if (req.user!.role === 'TRAINER' && req.user!.trainerId !== targetId) {
+    res.status(403).json({ error: 'Forbidden', message: 'You can only update your own coach profile.' });
+    return;
+  }
+  const idx = TRAINERS_DB.findIndex(t => t.id === targetId);
+  if (idx === -1) {
+    res.status(404).json({ error: 'Not Found', message: 'Trainer not found.' });
+    return;
+  }
+  const { name, phone, specialisation, workingHours, bio, photoUrl, certifications, experienceYears } = req.body;
+  TRAINERS_DB[idx] = {
+    ...TRAINERS_DB[idx],
+    ...(name ? { name } : {}),
+    ...(phone ? { phone } : {}),
+    ...(specialisation ? { specialisation } : {}),
+    ...(workingHours ? { workingHours } : {}),
+    ...(bio !== undefined ? { bio } : {}),
+    ...(photoUrl ? { photoUrl } : {}),
+    ...(certifications ? { certifications } : {}),
+    ...(experienceYears !== undefined ? { experienceYears: Number(experienceYears) } : {}),
+    id: TRAINERS_DB[idx].id
+  };
+  logAudit(req.user!.email, req.user!.role, 'TRAINER_PROFILE_UPDATED', targetId, `Updated coach profile for ${TRAINERS_DB[idx].name}`, 'SUCCESS');
+  res.json(TRAINERS_DB[idx]);
+});
+
+// 15. Members Create / Update / Delete
+app.post('/api/members', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER']), (req: AuthenticatedRequest, res: Response) => {
+  const member = req.body as Member;
+  if (!member?.fullName || !member?.mobile) {
+    res.status(400).json({ error: 'Bad Request', message: 'Member full name and mobile number are required.' });
+    return;
+  }
+  const cleanMobile = member.mobile.replace(/\s+/g, '').replace(/-/g, '');
+  if (MEMBERS_DB.some(m => m.mobile.replace(/\s+/g, '').replace(/-/g, '') === cleanMobile)) {
+    res.status(409).json({ error: 'Conflict', message: 'A member with this mobile number already exists.' });
+    return;
+  }
+  MEMBERS_DB.unshift(member);
+  logAudit(req.user!.email, req.user!.role, 'MEMBER_REGISTERED', member.id, `Registered member ${member.fullName} (${member.planName})`, 'SUCCESS');
+  res.status(201).json(member);
+});
+
+app.put('/api/members/:id', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const targetId = req.params.id;
+  const idx = MEMBERS_DB.findIndex(m => m.id === targetId);
+  if (idx === -1) {
+    res.status(404).json({ error: 'Not Found', message: 'Member not found.' });
+    return;
+  }
+
+  if (user.role === 'TRAINER') {
+    res.status(403).json({ error: 'Forbidden', message: 'Trainers cannot modify member administrative records.' });
+    return;
+  }
+
+  if (user.role === 'MEMBER') {
+    if (user.memberId !== targetId) {
+      res.status(403).json({ error: 'Forbidden', message: 'You can only update your own profile details.' });
+      return;
+    }
+    const { fitnessGoals, mobile, email, emergencyContact } = req.body;
+    const updatedSelf: Member = {
+      ...MEMBERS_DB[idx],
+      ...(fitnessGoals !== undefined ? { fitnessGoals } : {}),
+      ...(mobile ? { mobile } : {}),
+      ...(email !== undefined ? { email } : {}),
+      ...(emergencyContact ? { emergencyContact } : {}),
+      id: targetId
+    };
+    MEMBERS_DB[idx] = updatedSelf;
+    logAudit(user.email, user.role, 'MEMBER_SELF_PROFILE_UPDATED', targetId, `Member updated personal contact/goals`, 'SUCCESS');
+    res.json(updatedSelf);
+    return;
+  }
+
+  const updated = { ...MEMBERS_DB[idx], ...req.body, id: targetId };
+  MEMBERS_DB[idx] = updated;
+
+  // Keep trainer assignment synced
+  TRAINERS_DB.forEach(t => {
+    const shouldHave = updated.assignedTrainerId === t.id;
+    const currentlyHas = t.assignedMemberIds.includes(targetId);
+    if (shouldHave && !currentlyHas) t.assignedMemberIds.push(targetId);
+    if (!shouldHave && currentlyHas) t.assignedMemberIds = t.assignedMemberIds.filter(id => id !== targetId);
+  });
+
+  logAudit(user.email, user.role, 'MEMBER_UPDATED', targetId, `Updated profile/status for ${updated.fullName}`, 'SUCCESS');
+  res.json(updated);
+});
+
+app.delete('/api/members/:id', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER']), (req: AuthenticatedRequest, res: Response) => {
+  const targetId = req.params.id;
+  const idx = MEMBERS_DB.findIndex(m => m.id === targetId);
+  if (idx === -1) {
+    res.status(404).json({ error: 'Not Found', message: 'Member not found.' });
+    return;
+  }
+  const [removed] = MEMBERS_DB.splice(idx, 1);
+  logAudit(req.user!.email, req.user!.role, 'MEMBER_DELETED', targetId, `Removed member ${removed.fullName} from roster`, 'SUCCESS');
+  res.json({ success: true });
+});
+
+// 15b. Workouts Update (Status / Exercises)
+app.put('/api/workouts/:id', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER', 'TRAINER']), (req: AuthenticatedRequest, res: Response) => {
+  const targetId = req.params.id;
+  const idx = WORKOUTS_DB.findIndex(w => w.id === targetId);
+  if (idx === -1) {
+    res.status(404).json({ error: 'Not Found', message: 'Workout plan not found.' });
+    return;
+  }
+  WORKOUTS_DB[idx] = {
+    ...WORKOUTS_DB[idx],
+    ...req.body,
+    id: targetId,
+    updatedAt: new Date().toISOString().split('T')[0]
+  };
+  logAudit(req.user!.email, req.user!.role, 'WORKOUT_UPDATED', targetId, `Updated workout ${WORKOUTS_DB[idx].title} (${WORKOUTS_DB[idx].status})`, 'SUCCESS');
+  res.json(WORKOUTS_DB[idx]);
+});
+
+// 16. Plans Query & Price Update
+app.get('/api/plans', (_req: Request, res: Response) => {
+  res.json(PLANS_DB);
+});
+
+app.put('/api/plans/:id', authMiddleware, requireRole(['OWNER / ADMIN']), (req: AuthenticatedRequest, res: Response) => {
+  const idx = PLANS_DB.findIndex(p => p.id === req.params.id);
+  if (idx === -1) {
+    res.status(404).json({ error: 'Not Found', message: 'Membership plan not found.' });
+    return;
+  }
+  PLANS_DB[idx] = { ...PLANS_DB[idx], ...req.body, id: PLANS_DB[idx].id };
+  logAudit(req.user!.email, req.user!.role, 'PLAN_PRICING_UPDATED', PLANS_DB[idx].id, `Updated ${PLANS_DB[idx].name} to ₹${PLANS_DB[idx].price}`, 'SUCCESS');
+  res.json(PLANS_DB[idx]);
+});
+
+// 17. Leads & Website Enquiries
+app.get('/api/leads', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER']), (_req: AuthenticatedRequest, res: Response) => {
+  res.json(LEADS_DB);
+});
+
+app.post('/api/leads', (req: Request, res: Response) => {
+  const { name, mobile, email, source, interestedProduct, stage, notes } = req.body;
+  if (!name || !mobile) {
+    res.status(400).json({ error: 'Bad Request', message: 'Lead name and phone number are required.' });
+    return;
+  }
+  const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const newLead: Lead = {
+    id: `LEAD-2026-${Math.floor(100 + Math.random() * 900)}`,
+    name: String(name).trim(),
+    mobile: String(mobile).trim(),
+    email: email ? String(email).trim() : undefined,
+    source: source || 'Website',
+    interestedProduct: interestedProduct || 'Gym Membership',
+    assignedExecutive: 'Sneha Rao (Front Office)',
+    stage: stage || 'New enquiry',
+    enquiryDate: today,
+    lastContactDate: today,
+    nextFollowUpDate: tomorrow,
+    notes: notes ? String(notes).trim() : ''
+  };
+  LEADS_DB.unshift(newLead);
+  logAudit(email || name, source || 'Website', 'LEAD_CREATED', newLead.id, `New enquiry received from ${newLead.name}`, 'SUCCESS');
+  res.status(201).json(newLead);
+});
+
+app.put('/api/leads/:id', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER']), (req: AuthenticatedRequest, res: Response) => {
+  const idx = LEADS_DB.findIndex(l => l.id === req.params.id);
+  if (idx === -1) {
+    res.status(404).json({ error: 'Not Found', message: 'Lead not found.' });
+    return;
+  }
+  LEADS_DB[idx] = { ...LEADS_DB[idx], ...req.body, id: LEADS_DB[idx].id };
+  logAudit(req.user!.email, req.user!.role, 'LEAD_UPDATED', LEADS_DB[idx].id, `Updated lead ${LEADS_DB[idx].name} stage to ${LEADS_DB[idx].stage}`, 'SUCCESS');
+  res.json(LEADS_DB[idx]);
+});
+
+// 18. Biometric Logs & Renewals
+app.get('/api/biometric-logs', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER']), (_req: AuthenticatedRequest, res: Response) => {
+  res.json(BIOMETRIC_LOGS_DB);
+});
+
+app.post('/api/biometric-logs', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER']), (req: AuthenticatedRequest, res: Response) => {
+  const log = req.body as BiometricLog;
+  BIOMETRIC_LOGS_DB.unshift(log);
+  logAudit(req.user!.email, req.user!.role, 'TURNSTILE_SCAN', log.memberId, `${log.scanType} scan ${log.result} for ${log.memberName}`, 'SUCCESS');
+  res.status(201).json(log);
+});
+
+app.get('/api/renewals', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER']), (_req: AuthenticatedRequest, res: Response) => {
+  res.json(RENEWALS_DB);
+});
+
+app.put('/api/renewals/:id', authMiddleware, requireRole(['OWNER / ADMIN', 'CLUB MANAGER']), (req: AuthenticatedRequest, res: Response) => {
+  const idx = RENEWALS_DB.findIndex(r => r.id === req.params.id);
+  if (idx === -1) {
+    res.status(404).json({ error: 'Not Found', message: 'Renewal task not found.' });
+    return;
+  }
+  RENEWALS_DB[idx] = { ...RENEWALS_DB[idx], ...req.body, id: RENEWALS_DB[idx].id };
+  logAudit(req.user!.email, req.user!.role, 'RENEWAL_TASK_UPDATED', RENEWALS_DB[idx].id, `Updated renewal task for ${RENEWALS_DB[idx].memberName} (${RENEWALS_DB[idx].status})`, 'SUCCESS');
+  res.json(RENEWALS_DB[idx]);
 });
 
 

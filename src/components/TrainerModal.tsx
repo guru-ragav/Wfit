@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { TrainerProfile } from '../types';
-import { X, UserPlus, AlertCircle, Award, Clock, MapPin, Briefcase, Sparkles, Check } from 'lucide-react';
+import { X, UserPlus, AlertCircle, Sparkles, Check, Lock } from 'lucide-react';
 import { GYM_IMAGES } from '../assets/images';
 
 interface TrainerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveTrainer: (trainer: TrainerProfile, createAccount: boolean) => void;
+  onSaveTrainer: (trainer: TrainerProfile, createAccount: boolean, initialPassword?: string) => void;
   existingTrainers: TrainerProfile[];
 }
 
@@ -57,13 +57,14 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
   const [bio, setBio] = useState('');
   const [photoUrl, setPhotoUrl] = useState(PRESET_PHOTOS[0].url);
   const [createAccount, setCreateAccount] = useState(true);
+  const [initialPassword, setInitialPassword] = useState('Trainer@WFIT2026!');
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const toggleCertification = (cert: string) => {
-    setCertifications(prev => 
+    setCertifications(prev =>
       prev.includes(cert) ? prev.filter(c => c !== cert) : [...prev, cert]
     );
   };
@@ -82,7 +83,6 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
     e.preventDefault();
     setErrorMessage(null);
 
-    // Validation
     const cleanName = name.trim();
     if (!cleanName || cleanName.length < 2) {
       setErrorMessage('Please enter the trainer’s full legal or professional name.');
@@ -102,7 +102,11 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
       return;
     }
 
-    // Duplicate check against existing trainers
+    if (createAccount && initialPassword.trim().length < 8) {
+      setErrorMessage('Trainer login password must be at least 8 characters long.');
+      return;
+    }
+
     const duplicateEmail = existingTrainers.some(
       t => t.email.toLowerCase() === cleanEmail
     );
@@ -111,7 +115,6 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
       return;
     }
 
-    // Generate unique ID
     const namePrefix = cleanName.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6) || 'COACH';
     const trainerId = `TR-${namePrefix}-${Date.now().toString().slice(-4)}`;
 
@@ -130,14 +133,18 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
       assignedMemberIds: []
     };
 
-    onSaveTrainer(newTrainer, createAccount);
+    onSaveTrainer(newTrainer, createAccount, initialPassword.trim() || 'Trainer@WFIT2026!');
+    setName('');
+    setEmail('');
+    setPhone('+91 98');
+    setBio('');
     onClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="w-full max-w-2xl bg-white border border-[#E2E8F0] rounded-2xl text-[#172033] shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
-        
+
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-[#F8FAFC] border-b border-[#E2E8F0]">
           <div className="flex items-center gap-3">
@@ -153,7 +160,7 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
               </p>
             </div>
           </div>
-          <button 
+          <button
             type="button"
             onClick={onClose}
             className="text-[#70798A] hover:text-[#172033] hover:bg-slate-100 transition-colors p-1.5 rounded-lg cursor-pointer"
@@ -176,7 +183,7 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
-          
+
           {/* Photo & Preset Selector */}
           <div className="p-4 bg-[#F8FAFC] rounded-2xl border border-[#E2E8F0] space-y-3">
             <span className="text-xs font-bold text-[#172033] block">
@@ -346,7 +353,7 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
               </label>
               <span className="text-[11px] text-[#70798A]">Click to toggle or add new</span>
             </div>
-            
+
             <div className="flex flex-wrap gap-1.5">
               {CERTIFICATION_CHIPS.map((cert) => {
                 const active = certifications.includes(cert);
@@ -368,7 +375,6 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
               })}
             </div>
 
-            {/* Custom Certification Input */}
             <div className="flex gap-2 pt-1">
               <input
                 type="text"
@@ -402,26 +408,46 @@ export const TrainerModal: React.FC<TrainerModalProps> = ({
             />
           </div>
 
-          {/* CRM Account Provisioning Toggle */}
-          <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-2xl flex items-start justify-between gap-4">
-            <div className="space-y-0.5">
-              <div className="text-xs font-bold text-[#172033] flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[#1D4ED8]" />
-                <span>Create Trainer Portal Login Account</span>
+          {/* CRM Account Provisioning Toggle & Password */}
+          <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="text-xs font-bold text-[#172033] flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-[#1D4ED8]" />
+                  <span>Create Trainer Portal Login Account</span>
+                </div>
+                <div className="text-[11px] text-[#5B6475] leading-relaxed">
+                  Provisions an authenticated TRAINER login account so this coach can sign in immediately on the Login Page.
+                </div>
               </div>
-              <div className="text-[11px] text-[#5B6475] leading-relaxed">
-                Automatically provisions a CRM staff login with username derived from email and temporary demo password <code className="bg-white px-1.5 py-0.5 rounded border border-blue-200 font-mono text-[#1D4ED8] font-bold">Trainer@WFIT2026!</code>.
-              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input
+                  type="checkbox"
+                  checked={createAccount}
+                  onChange={(e) => setCreateAccount(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#1D4ED8]" />
+              </label>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
-              <input 
-                type="checkbox" 
-                checked={createAccount}
-                onChange={(e) => setCreateAccount(e.target.checked)}
-                className="sr-only peer" 
-              />
-              <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#1D4ED8]" />
-            </label>
+
+            {createAccount && (
+              <div className="pt-2 border-t border-blue-200/70">
+                <label className="block text-[11px] font-bold text-[#172033] mb-1">
+                  Initial Login Password (min. 8 chars)
+                </label>
+                <div className="relative">
+                  <Lock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#70798A]" />
+                  <input
+                    type="text"
+                    value={initialPassword}
+                    onChange={(e) => setInitialPassword(e.target.value)}
+                    placeholder="Trainer@WFIT2026!"
+                    className="w-full bg-white border border-blue-200 rounded-lg pl-8.5 pr-3 py-1.5 text-xs font-mono text-[#172033] focus:outline-none focus:border-[#1D4ED8]"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}

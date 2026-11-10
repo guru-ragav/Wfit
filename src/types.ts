@@ -16,6 +16,16 @@ export interface UserAccount {
   lastLoginAt?: string;
 }
 
+export interface UserPermissions {
+  canViewFinances: boolean;
+  canManageStaff: boolean;
+  canEditSecurity: boolean;
+  canManageMembers: boolean;
+  canManageWorkouts: boolean;
+  isTrainerOnly: boolean;
+  isMemberOnly: boolean;
+}
+
 export interface TrainerProfile {
   id: string;
   name: string;

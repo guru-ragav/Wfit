@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+:root {
+  --u: clamp(0.55px, calc(100vw / 1440), 1.15px);
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
@@ -11,6 +15,31 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+}
+
+.font-archivo-brand {
+  font-family: 'Archivo Black', 'Space Grotesk', sans-serif;
+  letter-spacing: 0.08em;
+}
+
+.font-archivo-title {
+  font-family: 'Archivo Black', 'Archivo', 'Space Grotesk', sans-serif;
+  font-weight: 900;
+}
+
+.font-archivo-wide {
+  font-family: 'Archivo', 'Plus Jakarta Sans', sans-serif;
+}
+
+.equipment-blend-mask {
+  mix-blend-mode: multiply;
+  mask-image: radial-gradient(ellipse 78% 82% at 50% 50%, black 58%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 78% 82% at 50% 50%, black 58%, transparent 100%);
+}
+
+/* Tabular numeral enforcement for KPIs and tables */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Custom scrollbars */
